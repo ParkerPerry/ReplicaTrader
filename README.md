@@ -36,7 +36,7 @@ Setup
 
 	1.	Clone the repository:
 
-git clone https://github.com/your-repo/replica-trader.git
+git clone https://github.com/ParkerPerry/ReplicaTrader.git
 cd replica-trader
 
 	2.	Install dependencies:
