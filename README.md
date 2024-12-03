@@ -27,7 +27,6 @@ replica-trader/
 
 1. Node.js and npm installed.
 2. Hardhat installed globally:
-   ```bash
    npm install -g hardhat
 3.	Infura account for connecting to Ethereum testnets.
 4.	Binance API keys for trade execution.
