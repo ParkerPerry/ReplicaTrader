@@ -14,7 +14,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenv().ok();
 
     // Initialize SQLite database pool
-    let db_pool = SqlitePool::connect("sqlite://trading_app.db").await?;
+    let db_pool = SqlitePool::connect(env::var("DATABASE_URL").unwrap().as_str()).await?;
 
     // Read Binance API credentials
     let api_key = env::var("BINANCE_API_KEY").expect("Missing BINANCE_API_KEY");

@@ -129,6 +129,25 @@ impl BinanceApi {
         Ok(response_body)
     }
 
+    /// Get historical trades for a symbol
+    pub async fn get_historical_trades(
+        &self,
+        symbol: &str,
+        limit: u32,
+    ) -> Result<Value, Error> {
+        let endpoint = format!("{}/api/v3/historicalTrades", self.base_url);
+        let response = self
+            .client
+            .get(&endpoint)
+            .query(&[("symbol", symbol), ("limit", &limit.to_string())])
+            .header("X-MBX-APIKEY", &self.api_key)
+            .send()
+            .await?;
+
+        let response_body: Value = response.json().await?;
+        Ok(response_body)
+    }
+
     // ------------------------
     // Account Management
     // ------------------------
@@ -185,6 +204,14 @@ impl BinanceApi {
     pub fn log_trade_failure(&self, user: &str, reason: &str) {
         eprintln!("Trade failed for user {}: {}", user, reason);
         // Store to a database or file for reconciliation if needed
+    }
+
+    /// Retry failed trade
+    pub async fn retry_failed_trade(&self, user: &str, symbol: &str, amount: f64, price: f64) -> Result<Value, String> {
+        match self.place_order(symbol, "BUY", "LIMIT", amount, price).await {
+            Ok(order) => Ok(order),
+            Err(e) => Err(format!("Failed to retry trade: {}", e)),
+        }
     }
 
     // ------------------------

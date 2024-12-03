@@ -4,14 +4,14 @@ use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-/// TradeProcessor is responsible for processing trades and ensuring risk checks.
+/// TradeProcessor handles liquidity checks, risk validation, and trade execution
 pub struct TradeProcessor {
     binance_client: Arc<Mutex<BinanceApi>>,
-    db_pool: Pool<Sqlite>, // Database connection pool
+    db_pool: Pool<Sqlite>,
 }
 
 impl TradeProcessor {
-    /// Creates a new instance of the TradeProcessor
+    /// Creates a new TradeProcessor instance
     pub fn new(binance_client: Arc<Mutex<BinanceApi>>, db_pool: Pool<Sqlite>) -> Self {
         Self {
             binance_client,
@@ -19,7 +19,7 @@ impl TradeProcessor {
         }
     }
 
-    /// Executes a trade with proper validations and error handling
+    /// Executes a trade with validations, including liquidity, slippage, stop-loss, and take-profit checks
     pub async fn execute_trade(
         &self,
         user: &str,
@@ -30,7 +30,6 @@ impl TradeProcessor {
         stop_loss: f64,
         take_profit: f64,
     ) -> Result<(), String> {
-        // Fetch the current market price from Binance
         let current_price = self
             .binance_client
             .lock()
@@ -39,7 +38,6 @@ impl TradeProcessor {
             .await
             .map_err(|e| format!("Failed to fetch price: {}", e))?;
 
-        // Validate slippage
         let allowed_slippage = slippage * price;
         if (current_price - price).abs() > allowed_slippage {
             return Err(format!(
@@ -48,22 +46,48 @@ impl TradeProcessor {
             ));
         }
 
-        // Validate stop-loss and take-profit
+        let order_book = self
+            .binance_client
+            .lock()
+            .await
+            .get_order_book(symbol, 10)
+            .await
+            .map_err(|e| format!("Failed to fetch order book: {}", e))?;
+
+        let bids = order_book["bids"]
+            .as_array()
+            .ok_or("Failed to parse order book bids")?;
+
+        let mut available_liquidity = 0.0;
+        for bid in bids {
+            let bid_price = bid[0].as_str().unwrap_or("0").parse::<f64>().unwrap_or(0.0);
+            let bid_volume = bid[1].as_str().unwrap_or("0").parse::<f64>().unwrap_or(0.0);
+            if bid_price >= price {
+                available_liquidity += bid_volume;
+                if available_liquidity >= amount {
+                    break;
+                }
+            }
+        }
+
+        if available_liquidity < amount {
+            return Err("Insufficient liquidity".to_string());
+        }
+
         if current_price < stop_loss {
             return Err(format!(
-                "Trade rejected: Current price {} is below stop-loss {}",
+                "Price {} is below stop-loss {}. Trade rejected.",
                 current_price, stop_loss
             ));
         }
 
         if current_price > take_profit {
             return Err(format!(
-                "Trade rejected: Current price {} is above take-profit {}",
+                "Price {} exceeds take-profit {}. Trade rejected.",
                 current_price, take_profit
             ));
         }
 
-        // Execute the trade on Binance
         let response = self
             .binance_client
             .lock()
@@ -92,7 +116,7 @@ impl TradeProcessor {
         }
     }
 
-    /// Logs successful trade attempts
+    /// Logs successful trades to the database
     async fn log_successful_trade(
         &self,
         user: &str,
@@ -100,7 +124,7 @@ impl TradeProcessor {
         amount: f64,
         price: f64,
     ) {
-        match sqlx::query!(
+        if let Err(e) = sqlx::query!(
             r#"
             INSERT INTO trades (user_address, symbol, amount, price, status, timestamp)
             VALUES (?1, ?2, ?3, ?4, 'success', strftime('%Y-%m-%d %H:%M:%f', 'now'))
@@ -113,12 +137,14 @@ impl TradeProcessor {
         .execute(&self.db_pool)
         .await
         {
-            Ok(_) => println!("Trade logged successfully for user {}", user),
-            Err(e) => eprintln!("Failed to log successful trade for user {}: {}", user, e),
+            eprintln!(
+                "Failed to log successful trade for user {} with error: {}",
+                user, e
+            );
         }
     }
 
-    /// Logs failed trade attempts for reconciliation
+    /// Logs failed trades for future reconciliation
     async fn log_failed_trade(
         &self,
         user: &str,
@@ -127,7 +153,7 @@ impl TradeProcessor {
         price: f64,
         reason: String,
     ) {
-        match sqlx::query!(
+        if let Err(e) = sqlx::query!(
             r#"
             INSERT INTO failed_trades (user_address, symbol, amount, price, reason, timestamp)
             VALUES (?1, ?2, ?3, ?4, ?5, strftime('%Y-%m-%d %H:%M:%f', 'now'))
@@ -141,8 +167,10 @@ impl TradeProcessor {
         .execute(&self.db_pool)
         .await
         {
-            Ok(_) => println!("Failed trade logged successfully for user {}", user),
-            Err(e) => eprintln!("Failed to log trade for user {}: {}", user, e),
+            eprintln!(
+                "Failed to log trade failure for user {} with error: {}",
+                user, e
+            );
         }
     }
 }

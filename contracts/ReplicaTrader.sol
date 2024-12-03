@@ -17,6 +17,7 @@ contract ReplicaTrader is AccessControl, ReentrancyGuard {
         uint256 stopLoss;    // Basis points
         uint256 takeProfit;  // Basis points
         uint256 slippage;    // Basis points
+        uint256 minLiquidity; // Minimum liquidity required for trade execution
         string symbol;       // Trading pair symbol (e.g., "BTCUSDT")
     }
 
@@ -43,8 +44,22 @@ contract ReplicaTrader is AccessControl, ReentrancyGuard {
     bool public isPaused;
 
     event Subscribed(address indexed user, uint256 tier, uint256 expiry);
-    event SettingsUpdated(address indexed user, uint256 stopLoss, uint256 takeProfit, uint256 slippage, string symbol);
-    event TradeTriggered(address indexed user, uint256 amount, uint256 price, string symbol, uint256 timestamp);
+    event SettingsUpdated(
+        address indexed user,
+        uint256 stopLoss,
+        uint256 takeProfit,
+        uint256 slippage,
+        uint256 minLiquidity,
+        string symbol
+    );
+    event TradeTriggered(
+        address indexed user,
+        uint256 amount,
+        uint256 price,
+        string symbol,
+        uint256 minLiquidity,
+        uint256 timestamp
+    );
     event TradeFailed(address indexed user, string reason);
     event EmergencyPause(bool status);
     event PlatformFeeRecipientUpdated(address indexed newRecipient);
@@ -75,11 +90,9 @@ contract ReplicaTrader is AccessControl, ReentrancyGuard {
         require(fee > 0 && duration > 0, "Invalid subscription tier");
         require(msg.value == fee, "Incorrect fee");
 
-        // Update subscription expiry
         subscriptions[msg.sender].expiry = block.timestamp + duration;
         subscriptions[msg.sender].tier = tier;
 
-        // Send platform fee
         (bool success, ) = feeRecipient.call{value: msg.value}("");
         require(success, "Fee transfer failed");
 
@@ -92,10 +105,8 @@ contract ReplicaTrader is AccessControl, ReentrancyGuard {
         uint256 duration = subscriptionDurations[tier];
         require(fee > 0 && duration > 0, "Invalid subscription tier");
 
-        // Transfer fee from user to the feeRecipient
         IERC20(token).transferFrom(msg.sender, feeRecipient, fee);
 
-        // Update subscription expiry
         subscriptions[msg.sender].expiry = block.timestamp + duration;
         subscriptions[msg.sender].tier = tier;
 
@@ -126,6 +137,7 @@ contract ReplicaTrader is AccessControl, ReentrancyGuard {
         uint256 stopLoss,
         uint256 takeProfit,
         uint256 slippage,
+        uint256 minLiquidity,
         string memory symbol
     ) external whenNotPaused {
         require(isSubscribed(msg.sender), "Subscription expired");
@@ -134,10 +146,11 @@ contract ReplicaTrader is AccessControl, ReentrancyGuard {
             stopLoss: stopLoss,
             takeProfit: takeProfit,
             slippage: slippage,
+            minLiquidity: minLiquidity,
             symbol: symbol
         });
 
-        emit SettingsUpdated(msg.sender, stopLoss, takeProfit, slippage, symbol);
+        emit SettingsUpdated(msg.sender, stopLoss, takeProfit, slippage, minLiquidity, symbol);
     }
 
     // ------------------------
@@ -148,9 +161,16 @@ contract ReplicaTrader is AccessControl, ReentrancyGuard {
         require(isSubscribed(msg.sender), "Subscription expired");
         require(block.timestamp > lastTradeTimestamp[msg.sender] + 1 minutes, "Trade cooldown active");
 
-        // Enforce off-chain risk settings for slippage, stop-loss, and take-profit
         UserSettings memory settings = userSettings[msg.sender];
-        emit TradeTriggered(msg.sender, amount, price, settings.symbol, block.timestamp);
+
+        emit TradeTriggered(
+            msg.sender,
+            amount,
+            price,
+            settings.symbol,
+            settings.minLiquidity,
+            block.timestamp
+        );
 
         tradeHistory[msg.sender].push(TradeRecord({
             tradeId: tradeHistory[msg.sender].length + 1,

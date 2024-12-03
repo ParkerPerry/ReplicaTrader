@@ -18,14 +18,33 @@ async function main() {
     console.log("Subscribed successfully with Token!");
 
     // Example: Set user settings
-    const settingsTx = await replicaTrader.setUserSettings(500, 1000, 50); // StopLoss, TakeProfit, Slippage
+    const stopLoss = 500; // Example: 5% stop-loss
+    const takeProfit = 1000; // Example: 10% take-profit
+    const slippage = 50; // Example: 0.5% slippage
+    const minLiquidity = 10; // Example: 10 units of liquidity required
+    const symbol = "BTCUSDT"; // Example trading pair symbol
+    const settingsTx = await replicaTrader.setUserSettings(stopLoss, takeProfit, slippage, minLiquidity, symbol);
     await settingsTx.wait();
     console.log("User settings updated!");
 
     // Example: Trigger a trade
-    const tradeTx = await replicaTrader.triggerTrade(1, 20000); // Amount, Price
+    const amount = 1; // Example: 1 unit of the asset
+    const price = 20000; // Example: $20,000 per unit
+    const tradeTx = await replicaTrader.triggerTrade(amount, price);
     await tradeTx.wait();
     console.log("Trade triggered!");
+
+    // Example: Retrieve trade history
+    const tradeHistory = await replicaTrader.getTradeHistory("0xYourUserAddressHere");
+    console.log("Trade History:", tradeHistory);
+
+    // Example: Retrieve contract fee recipient
+    const feeRecipient = await replicaTrader.feeRecipient();
+    console.log("Fee recipient address:", feeRecipient);
+
+    // Example: Check subscription status
+    const isSubscribed = await replicaTrader.isSubscribed("0xYourUserAddressHere");
+    console.log("Subscription active:", isSubscribed);
 }
 
 main().catch((error) => {

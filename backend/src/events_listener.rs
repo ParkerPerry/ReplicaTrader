@@ -6,6 +6,7 @@ use std::sync::Arc;
 use crate::binance_api::BinanceApi;
 
 pub async fn listen_to_events() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize Ethereum provider and contract
     let provider = Provider::<Http>::try_from("https://your-eth-node")?;
     let contract_address = "0xYourContractAddress".parse()?;
     let abi = include_str!("../abi/ReplicaTrader.json");
@@ -17,7 +18,7 @@ pub async fn listen_to_events() -> Result<(), Box<dyn std::error::Error>> {
         "your_binance_secret_key".to_string(),
     )));
 
-    // Listen to `TradeTriggered` events with symbol support
+    // Listen to `TradeTriggered` events with dynamic symbol support
     let mut stream = contract
         .event::<(Address, U256, U256, String, U256)>("TradeTriggered")
         .stream()
@@ -39,7 +40,7 @@ pub async fn listen_to_events() -> Result<(), Box<dyn std::error::Error>> {
                     let stop_loss = 30000.0;       // Example stop-loss price
                     let take_profit = 40000.0;     // Example take-profit price
 
-                    // Fetch current price
+                    // Fetch current price from Binance API
                     let current_price = binance_api
                         .lock()
                         .await
@@ -57,7 +58,7 @@ pub async fn listen_to_events() -> Result<(), Box<dyn std::error::Error>> {
                         return;
                     }
 
-                    // Check stop-loss and take-profit
+                    // Check stop-loss and take-profit thresholds
                     if current_price < stop_loss || current_price > take_profit {
                         println!(
                             "Trade failed for user: {} due to stop-loss or take-profit violation.",
@@ -66,7 +67,7 @@ pub async fn listen_to_events() -> Result<(), Box<dyn std::error::Error>> {
                         return;
                     }
 
-                    // Execute trade via Binance API
+                    // Execute trade on Binance
                     let result = binance_api
                         .lock()
                         .await
@@ -74,12 +75,18 @@ pub async fn listen_to_events() -> Result<(), Box<dyn std::error::Error>> {
                         .await;
 
                     match result {
-                        Ok(order_id) => println!(
-                            "Trade successful for user: {} with Order ID: {}",
-                            trade_user, order_id
-                        ),
+                        Ok(order_id) => {
+                            println!(
+                                "Trade successful for user: {} with Order ID: {}",
+                                trade_user, order_id
+                            );
+                        }
                         Err(e) => {
-                            println!("Trade execution failed for user: {}: {:?}", trade_user, e);
+                            eprintln!(
+                                "Trade execution failed for user: {}: {:?}",
+                                trade_user, e
+                            );
+                            // Optionally: Log failed trade details here
                         }
                     }
                 });
