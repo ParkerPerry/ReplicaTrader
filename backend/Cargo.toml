@@ -1,0 +1,17 @@
+[package]
+name = "replica_trader"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dotenv = "0.15.0"                   
+ethers = "1.0.0-beta.2"             
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"                  
+tokio = { version = "1", features = ["full"] }    
+reqwest = "0.11"                    # HTTP client for Binance API integration
+sqlx = { version = "0.6", features = ["runtime-tokio-native-tls", "sqlite"] } # SQLite database integration
+futures = "0.3"                     
+thiserror = "1.0"                   
+log = "0.4"                         
+env_logger = "0.10"                 

@@ -1,0 +1,19 @@
+{
+  "name": "replica-trader",
+  "version": "1.0.0",
+  "description": "Trading Via the Binance API",
+  "main": "scripts/interact.js",
+  "scripts": {
+    "test": "npx hardhat test",
+    "deploy": "npx hardhat run scripts/deploy.js --network goerli",
+    "interact": "node scripts/interact.js"
+  },
+  "dependencies": {
+    "@nomiclabs/hardhat-waffle": "^2.0.1",
+    "dotenv": "^10.0.0",
+    "ethers": "^5.4.0",
+    "hardhat": "^2.11.2"
+  },
+  "author": "",
+  "license": "MIT"
+}

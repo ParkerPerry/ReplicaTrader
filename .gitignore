@@ -1,0 +1,35 @@
+# Node.js dependencies
+node_modules/
+
+# Hardhat artifacts and cache
+artifacts/
+cache/
+
+# Environment variables
+.env
+
+# Backend build files and Rust artifacts
+backend/target/
+Cargo.lock
+
+# Database files
+database/*.db
+*.sqlite
+replica_trader.db
+
+# Logs and temporary files
+*.log
+*.tmp
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# IDE and editor specific files
+.idea/
+.vscode/
+*.swp
+
+# Tests output
+tests/results/
+tests/output/
