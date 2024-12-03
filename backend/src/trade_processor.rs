@@ -77,6 +77,7 @@ impl TradeProcessor {
                     "Trade executed successfully for user {}: Order details: {:?}",
                     user, order
                 );
+                self.log_successful_trade(user, symbol, amount, price).await;
                 Ok(())
             }
             Err(e) => {
@@ -88,6 +89,32 @@ impl TradeProcessor {
                     .await;
                 Err(format!("Failed to execute trade: {}", e))
             }
+        }
+    }
+
+    /// Logs successful trade attempts
+    async fn log_successful_trade(
+        &self,
+        user: &str,
+        symbol: &str,
+        amount: f64,
+        price: f64,
+    ) {
+        match sqlx::query!(
+            r#"
+            INSERT INTO trades (user_address, symbol, amount, price, status, timestamp)
+            VALUES (?1, ?2, ?3, ?4, 'success', strftime('%Y-%m-%d %H:%M:%f', 'now'))
+            "#,
+            user,
+            symbol,
+            amount,
+            price
+        )
+        .execute(&self.db_pool)
+        .await
+        {
+            Ok(_) => println!("Trade logged successfully for user {}", user),
+            Err(e) => eprintln!("Failed to log successful trade for user {}: {}", user, e),
         }
     }
 

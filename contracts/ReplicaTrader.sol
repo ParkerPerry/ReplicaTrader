@@ -17,6 +17,7 @@ contract ReplicaTrader is AccessControl, ReentrancyGuard {
         uint256 stopLoss;    // Basis points
         uint256 takeProfit;  // Basis points
         uint256 slippage;    // Basis points
+        string symbol;       // Trading pair symbol (e.g., "BTCUSDT")
     }
 
     struct TradeRecord {
@@ -24,6 +25,7 @@ contract ReplicaTrader is AccessControl, ReentrancyGuard {
         uint256 amount;
         uint256 price;
         uint256 timestamp;
+        string symbol;
     }
 
     mapping(address => Subscription) public subscriptions;
@@ -41,8 +43,8 @@ contract ReplicaTrader is AccessControl, ReentrancyGuard {
     bool public isPaused;
 
     event Subscribed(address indexed user, uint256 tier, uint256 expiry);
-    event SettingsUpdated(address indexed user, uint256 stopLoss, uint256 takeProfit, uint256 slippage);
-    event TradeTriggered(address indexed user, uint256 amount, uint256 price, uint256 timestamp);
+    event SettingsUpdated(address indexed user, uint256 stopLoss, uint256 takeProfit, uint256 slippage, string symbol);
+    event TradeTriggered(address indexed user, uint256 amount, uint256 price, string symbol, uint256 timestamp);
     event TradeFailed(address indexed user, string reason);
     event EmergencyPause(bool status);
     event PlatformFeeRecipientUpdated(address indexed newRecipient);
@@ -123,17 +125,19 @@ contract ReplicaTrader is AccessControl, ReentrancyGuard {
     function setUserSettings(
         uint256 stopLoss,
         uint256 takeProfit,
-        uint256 slippage
+        uint256 slippage,
+        string memory symbol
     ) external whenNotPaused {
         require(isSubscribed(msg.sender), "Subscription expired");
 
         userSettings[msg.sender] = UserSettings({
             stopLoss: stopLoss,
             takeProfit: takeProfit,
-            slippage: slippage
+            slippage: slippage,
+            symbol: symbol
         });
 
-        emit SettingsUpdated(msg.sender, stopLoss, takeProfit, slippage);
+        emit SettingsUpdated(msg.sender, stopLoss, takeProfit, slippage, symbol);
     }
 
     // ------------------------
@@ -146,13 +150,14 @@ contract ReplicaTrader is AccessControl, ReentrancyGuard {
 
         // Enforce off-chain risk settings for slippage, stop-loss, and take-profit
         UserSettings memory settings = userSettings[msg.sender];
-        emit TradeTriggered(msg.sender, amount, price, block.timestamp);
+        emit TradeTriggered(msg.sender, amount, price, settings.symbol, block.timestamp);
 
         tradeHistory[msg.sender].push(TradeRecord({
             tradeId: tradeHistory[msg.sender].length + 1,
             amount: amount,
             price: price,
-            timestamp: block.timestamp
+            timestamp: block.timestamp,
+            symbol: settings.symbol
         }));
     }
 

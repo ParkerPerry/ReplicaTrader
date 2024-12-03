@@ -17,27 +17,43 @@ pub async fn listen_to_events() -> Result<(), Box<dyn std::error::Error>> {
         "your_binance_secret_key".to_string(),
     )));
 
-    let mut stream = contract.event::<(Address, U256, U256, U256)>("TradeTriggered").stream().await?;
+    // Listen to `TradeTriggered` events with symbol support
+    let mut stream = contract
+        .event::<(Address, U256, U256, String, U256)>("TradeTriggered")
+        .stream()
+        .await?;
+
     while let Some(event) = stream.next().await {
         match event {
-            Ok((user, amount, price, _timestamp)) => {
-                println!("Trade triggered: User: {}, Amount: {}, Price: {}", user, amount, price);
+            Ok((user, amount, price, symbol, _timestamp)) => {
+                println!(
+                    "Trade triggered: User: {}, Amount: {}, Price: {}, Symbol: {}",
+                    user, amount, price, symbol
+                );
+
                 let binance_api = binance_api.clone();
                 let trade_user = user.clone();
 
                 tokio::spawn(async move {
-                    // Validate conditions before executing
                     let slippage_threshold = 0.01; // Example: 1% slippage allowed
-                    let stop_loss = 30_000.0;      // Example stop-loss price
-                    let take_profit = 40_000.0;    // Example take-profit price
+                    let stop_loss = 30000.0;       // Example stop-loss price
+                    let take_profit = 40000.0;     // Example take-profit price
 
                     // Fetch current price
-                    let current_price = binance_api.lock().await.get_price("BTCUSDT").await.unwrap_or(0.0);
+                    let current_price = binance_api
+                        .lock()
+                        .await
+                        .get_price(&symbol)
+                        .await
+                        .unwrap_or(0.0);
 
-                    // Check slippage
+                    // Validate slippage
                     let price_difference = (current_price - price.as_u64() as f64).abs();
                     if price_difference / price.as_u64() as f64 > slippage_threshold {
-                        println!("Trade failed due to excessive slippage for user: {}", trade_user);
+                        println!(
+                            "Trade failed due to excessive slippage for user: {}",
+                            trade_user
+                        );
                         return;
                     }
 
@@ -51,19 +67,19 @@ pub async fn listen_to_events() -> Result<(), Box<dyn std::error::Error>> {
                     }
 
                     // Execute trade via Binance API
-                    let result = binance_api.lock().await.place_order(
-                        "BTCUSDT",
-                        "BUY",
-                        "LIMIT",
-                        amount.as_u64() as f64,
-                        price.as_u64() as f64,
-                    ).await;
+                    let result = binance_api
+                        .lock()
+                        .await
+                        .place_order(&symbol, "BUY", "LIMIT", amount.as_u64() as f64, price.as_u64() as f64)
+                        .await;
 
                     match result {
-                        Ok(order_id) => println!("Trade successful for user: {} with Order ID: {}", trade_user, order_id),
+                        Ok(order_id) => println!(
+                            "Trade successful for user: {} with Order ID: {}",
+                            trade_user, order_id
+                        ),
                         Err(e) => {
                             println!("Trade execution failed for user: {}: {:?}", trade_user, e);
-                            // Log failure or attempt reconciliation
                         }
                     }
                 });
